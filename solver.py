@@ -85,9 +85,18 @@ class Solver(object):
         self.build_model()
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.criterion = nn.MSELoss()
+        self.freq_loss_weight = getattr(config, 'freq_loss_weight', 0.1) if not isinstance(config, dict) else config.get('freq_loss_weight', 0.1)
+
+    def freq_recon_loss(self, output, target):
+        """频域重建损失：比较频域上的幅度差异"""
+        output_freq = torch.fft.rfft(output, dim=1)
+        target_freq = torch.fft.rfft(target, dim=1)
+        loss = F.mse_loss(output_freq.abs(), target_freq.abs())
+        return loss
 
     def build_model(self):
-        self.model = AnomalyTransformer(win_size=self.win_size, enc_in=self.input_c, c_out=self.output_c, e_layers=3)
+        use_freq = getattr(self, 'use_freq', True)
+        self.model = AnomalyTransformer(win_size=self.win_size, enc_in=self.input_c, c_out=self.output_c, e_layers=3, use_freq=use_freq)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
         if torch.cuda.is_available():
@@ -122,8 +131,10 @@ class Solver(object):
             prior_loss = prior_loss / len(prior)
 
             rec_loss = self.criterion(output, input)
-            loss_1.append((rec_loss - self.k * series_loss).item())
-            loss_2.append((rec_loss + self.k * prior_loss).item())
+            f_loss = self.freq_recon_loss(output, input)
+            rec_loss_total = rec_loss + self.freq_loss_weight * f_loss
+            loss_1.append((rec_loss_total - self.k * series_loss).item())
+            loss_2.append((rec_loss_total + self.k * prior_loss).item())
 
         return np.average(loss_1), np.average(loss_2)
 
@@ -174,9 +185,13 @@ class Solver(object):
 
                 rec_loss = self.criterion(output, input)
 
-                loss1_list.append((rec_loss - self.k * series_loss).item())
-                loss1 = rec_loss - self.k * series_loss
-                loss2 = rec_loss + self.k * prior_loss
+                # 频域重建损失
+                f_loss = self.freq_recon_loss(output, input)
+                rec_loss_total = rec_loss + self.freq_loss_weight * f_loss
+
+                loss1_list.append((rec_loss_total - self.k * series_loss).item())
+                loss1 = rec_loss_total - self.k * series_loss
+                loss2 = rec_loss_total + self.k * prior_loss
 
                 if (i + 1) % 100 == 0:
                     speed = (time.time() - time_now) / iter_count

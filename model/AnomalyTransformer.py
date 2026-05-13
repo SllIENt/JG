@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from .attn import AnomalyAttention, AttentionLayer
 from .embed import DataEmbedding, TokenEmbedding
+from .freq_layer import FrequencyLayer
 
 
 class EncoderLayer(nn.Module):
@@ -32,9 +33,10 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, attn_layers, norm_layer=None):
+    def __init__(self, attn_layers, norm_layer=None, freq_layers=None):
         super(Encoder, self).__init__()
         self.attn_layers = nn.ModuleList(attn_layers)
+        self.freq_layers = nn.ModuleList(freq_layers) if freq_layers else None
         self.norm = norm_layer
 
     def forward(self, x, attn_mask=None):
@@ -42,8 +44,11 @@ class Encoder(nn.Module):
         series_list = []
         prior_list = []
         sigma_list = []
-        for attn_layer in self.attn_layers:
+        for i, attn_layer in enumerate(self.attn_layers):
             x, series, prior, sigma = attn_layer(x, attn_mask=attn_mask)
+            # 频域增强
+            if self.freq_layers is not None and i < len(self.freq_layers):
+                x = self.freq_layers[i](x)
             series_list.append(series)
             prior_list.append(prior)
             sigma_list.append(sigma)
@@ -56,12 +61,16 @@ class Encoder(nn.Module):
 
 class AnomalyTransformer(nn.Module):
     def __init__(self, win_size, enc_in, c_out, d_model=512, n_heads=8, e_layers=3, d_ff=512,
-                 dropout=0.0, activation='gelu', output_attention=True):
+                 dropout=0.0, activation='gelu', output_attention=True, use_freq=True):
         super(AnomalyTransformer, self).__init__()
         self.output_attention = output_attention
+        self.use_freq = use_freq
 
         # Encoding
         self.embedding = DataEmbedding(enc_in, d_model, dropout)
+
+        # 频域增强层
+        freq_layers = [FrequencyLayer(d_model, n_heads, dropout) for _ in range(e_layers)] if use_freq else None
 
         # Encoder
         self.encoder = Encoder(
@@ -76,7 +85,8 @@ class AnomalyTransformer(nn.Module):
                     activation=activation
                 ) for l in range(e_layers)
             ],
-            norm_layer=torch.nn.LayerNorm(d_model)
+            norm_layer=torch.nn.LayerNorm(d_model),
+            freq_layers=freq_layers
         )
 
         self.projection = nn.Linear(d_model, c_out, bias=True)
