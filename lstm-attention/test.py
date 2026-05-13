@@ -10,14 +10,20 @@ from models.lstm_attention import LSTMAttentionAnomalyDetector
 from utils.data_loader import get_dataloader
 
 
-def calculate_anomaly_scores(model, test_loader, device):
+def calculate_anomaly_scores(model, data_loader, device, has_labels=False):
     """计算异常分数"""
     model.eval()
     all_errors = []
     all_labels = []
 
     with torch.no_grad():
-        for data, target, labels in test_loader:
+        for batch in data_loader:
+            if has_labels:
+                data, target, labels = batch
+                all_labels.append(labels.numpy())
+            else:
+                data, target = batch
+
             data = data.to(device)
             target = target.to(device)
 
@@ -30,12 +36,14 @@ def calculate_anomaly_scores(model, test_loader, device):
             error = torch.mean((output - target) ** 2, dim=-1)  # (batch, seq_len)
 
             all_errors.append(error.cpu().numpy())
-            all_labels.append(labels.numpy())
 
     all_errors = np.concatenate(all_errors, axis=0).reshape(-1)
-    all_labels = np.concatenate(all_labels, axis=0).reshape(-1)
 
-    return all_errors, all_labels
+    if has_labels:
+        all_labels = np.concatenate(all_labels, axis=0).reshape(-1)
+        return all_errors, all_labels
+    else:
+        return all_errors, None
 
 
 def find_threshold(errors, labels, percentile=95):
@@ -104,13 +112,13 @@ def main():
 
     # 计算训练集误差（用于确定阈值）
     print('Calculating training errors...')
-    train_errors, _ = calculate_anomaly_scores(model, train_loader, device)
+    train_errors, _ = calculate_anomaly_scores(model, train_loader, device, has_labels=False)
     threshold = find_threshold(train_errors, None, args.percentile)
     print(f'Threshold (percentile={args.percentile}): {threshold:.6f}')
 
     # 测试
     print('Testing...')
-    test_errors, test_labels = calculate_anomaly_scores(model, test_loader, device)
+    test_errors, test_labels = calculate_anomaly_scores(model, test_loader, device, has_labels=True)
 
     # 评估
     accuracy, precision, recall, f_score = evaluate(test_errors, test_labels, threshold)
