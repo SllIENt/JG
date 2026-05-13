@@ -61,12 +61,13 @@ def evaluate(errors, labels, threshold):
 
 def main():
     parser = argparse.ArgumentParser(description='Test LSTM Anomaly Detector')
-    parser.add_argument('--data_path', type=str, default='../dataset/SMD')
+    parser.add_argument('--data_path', type=str, default='data/dataset/SMD')
     parser.add_argument('--model', type=str, default='lstm', choices=['lstm', 'lstm_attention'])
     parser.add_argument('--hidden_dim', type=int, default=128)
     parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--n_heads', type=int, default=4)
     parser.add_argument('--win_size', type=int, default=100)
+    parser.add_argument('--step', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--checkpoint', type=str, default='checkpoints')
     parser.add_argument('--percentile', type=float, default=95)
@@ -78,8 +79,8 @@ def main():
     print(f'Using device: {device}')
 
     # 数据加载
-    train_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, 'train')
-    test_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, 'test')
+    train_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, args.step, 'train')
+    test_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, args.step, 'test')
 
     # 模型
     input_dim = 38

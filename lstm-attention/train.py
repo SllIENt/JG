@@ -15,6 +15,7 @@ def train_epoch(model, train_loader, optimizer, criterion, device):
     """训练一个 epoch"""
     model.train()
     total_loss = 0
+    num_batches = len(train_loader)
 
     for batch_idx, (data, target) in enumerate(train_loader):
         data = data.to(device)
@@ -37,7 +38,11 @@ def train_epoch(model, train_loader, optimizer, criterion, device):
 
         total_loss += loss.item()
 
-    return total_loss / len(train_loader)
+        # 每 100 个 batch 打印进度
+        if (batch_idx + 1) % 100 == 0:
+            print(f'  Batch {batch_idx + 1}/{num_batches} | Loss: {loss.item():.6f}')
+
+    return total_loss / num_batches
 
 
 def validate(model, val_loader, criterion, device):
@@ -63,12 +68,13 @@ def validate(model, val_loader, criterion, device):
 
 def main():
     parser = argparse.ArgumentParser(description='Train LSTM Anomaly Detector')
-    parser.add_argument('--data_path', type=str, default='../dataset/SMD')
+    parser.add_argument('--data_path', type=str, default='../Anomaly-Transformer/dataset/SMD')
     parser.add_argument('--model', type=str, default='lstm', choices=['lstm', 'lstm_attention'])
     parser.add_argument('--hidden_dim', type=int, default=128)
     parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--n_heads', type=int, default=4)
     parser.add_argument('--win_size', type=int, default=100)
+    parser.add_argument('--step', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--epochs', type=int, default=50)
@@ -81,8 +87,14 @@ def main():
     print(f'Using device: {device}')
 
     # 数据加载
-    train_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, 'train')
-    val_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, 'val')
+    print(f'Loading data from: {args.data_path}')
+    print('Loading train data...')
+    train_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, args.step, 'train')
+    print(f'Train samples: {len(train_loader.dataset)}')
+    print('Loading val data...')
+    val_loader = get_dataloader(args.data_path, args.batch_size, args.win_size, args.step, 'val')
+    print(f'Val samples: {len(val_loader.dataset)}')
+    print('Data loaded successfully!')
 
     # 模型
     input_dim = 38  # SMD 数据集特征维度

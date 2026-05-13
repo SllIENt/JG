@@ -7,8 +7,9 @@ from sklearn.preprocessing import StandardScaler
 class SMDDataset(Dataset):
     """SMD 数据集加载器"""
 
-    def __init__(self, data_path, win_size=100, mode='train'):
+    def __init__(self, data_path, win_size=100, step=100, mode='train'):
         self.win_size = win_size
+        self.step = step
         self.mode = mode
         self.scaler = StandardScaler()
 
@@ -29,16 +30,16 @@ class SMDDataset(Dataset):
 
     def __len__(self):
         if self.mode == 'train':
-            return len(self.train) - self.win_size + 1
+            return (len(self.train) - self.win_size) // self.step + 1
         elif self.mode == 'val':
-            return len(self.val) - self.win_size + 1
+            return (len(self.val) - self.win_size) // self.step + 1
         else:
-            return len(self.test) - self.win_size + 1
+            return (len(self.test) - self.win_size) // self.step + 1
 
     def __getitem__(self, idx):
+        idx = idx * self.step
         if self.mode == 'train':
             data = self.train[idx:idx + self.win_size]
-            # 重建目标：输入本身
             return torch.FloatTensor(data), torch.FloatTensor(data)
         elif self.mode == 'val':
             data = self.val[idx:idx + self.win_size]
@@ -49,9 +50,9 @@ class SMDDataset(Dataset):
             return torch.FloatTensor(data), torch.FloatTensor(data), torch.LongTensor(labels)
 
 
-def get_dataloader(data_path, batch_size, win_size=100, mode='train'):
+def get_dataloader(data_path, batch_size, win_size=100, step=100, mode='train'):
     """获取数据加载器"""
-    dataset = SMDDataset(data_path, win_size, mode)
+    dataset = SMDDataset(data_path, win_size, step, mode)
 
     if mode == 'train':
         shuffle = True
