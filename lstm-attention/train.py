@@ -63,7 +63,7 @@ def validate(model, val_loader, criterion, device):
 
 def main():
     parser = argparse.ArgumentParser(description='Train LSTM Anomaly Detector')
-    parser.add_argument('--data_path', type=str, default='data/dataset/SMD')
+    parser.add_argument('--data_path', type=str, default='../dataset/SMD')
     parser.add_argument('--model', type=str, default='lstm', choices=['lstm', 'lstm_attention'])
     parser.add_argument('--hidden_dim', type=int, default=128)
     parser.add_argument('--num_layers', type=int, default=2)
